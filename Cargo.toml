@@ -1,0 +1,11 @@
+[package]
+
+name = "spsc_buffer"
+version = "0.0.1"
+authors = ["rroelke <ryan_roelke@brown.edu>"]
+
+[dependencies.assertions]
+git = "http://github.com/rroelke/assertions.rs"
+
+[lib]
+name = "spsc_buffer"
