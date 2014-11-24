@@ -63,7 +63,7 @@ impl Producer {
     pub fn next(&self) -> uint {
         unsafe {
             match *(self.inner.interior.get()) {
-                (rp, _, _) => rp
+                (_, wp, _) => wp
             }
         }
     }
@@ -118,7 +118,7 @@ impl Consumer {
     pub fn next(&self) -> uint {
         unsafe {
             match *(self.inner.interior.get()) {
-                (_, wp, _) => wp
+                (rp, _, _) => rp
             }
         }
     }

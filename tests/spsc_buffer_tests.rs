@@ -7,6 +7,32 @@ use std::rand::random;
 use spsc_buffer::{CircularBuffer, Consumer, Producer};
 
 #[test]
+fn test_next() {
+    let calib : uint = random();
+    let (p, c) : (Producer, Consumer) =
+                  CircularBuffer::new_calibrated(65536, calib);
+    assert_eq!(p.next(), calib);
+    assert_eq!(c.next(), calib);
+
+    let mut buf : [u8, .. 1024] = [0, .. 1024];
+    assert_eq!(p.write(buf.as_slice()), 1024);
+    assert_eq!(p.next(), calib + 1024);
+    assert_eq!(c.next(), calib);
+
+    assert_eq!(c.read(buf.slice_to_mut(512)), 512);
+    assert_eq!(p.next(), calib + 1024);
+    assert_eq!(c.next(), calib + 512);
+
+    assert_eq!(c.copy_data(calib + 512, buf.as_mut_slice()), 512);
+    assert_eq!(p.next(), calib + 1024);
+    assert_eq!(c.next(), calib + 512);
+
+    assert_eq!(c.advance(256), 256);
+    assert_eq!(p.next(), calib + 1024);
+    assert_eq!(c.next(), calib + 512 + 256);
+}
+
+#[test]
 fn test_buf() {
     let calib : uint = ::std::rand::random();
     let (p, c) : (Producer, Consumer) =
