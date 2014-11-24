@@ -47,6 +47,14 @@ impl CircularBuffer {
     }
 }
 
+/// Producers are cloneable, and can be safely shared provided the write()s
+/// of no two threads ever overlap.  Any other methods may overlap
+impl Clone for Producer {
+    fn clone(&self) -> Producer {
+        Producer { inner : self.inner.clone() }
+    }
+}
+
 impl Producer {
     pub fn is_full(&self) -> bool {
         self.available_capacity() == 0
@@ -90,6 +98,15 @@ impl Producer {
                 }
             }
         }
+    }
+}
+
+/// Consumers are cloneable, and can be safely shared if at most one thread
+/// is read()ing at a time.  This object is linearizable as long as that
+/// constraint is not violated.
+impl Clone for Consumer {
+    fn clone(&self) -> Consumer {
+        Consumer { inner : self.inner.clone() }
     }
 }
 
