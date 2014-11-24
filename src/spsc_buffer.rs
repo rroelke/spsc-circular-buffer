@@ -6,13 +6,19 @@ use std::cmp::min;
 use std::num::UnsignedInt;
 use std::sync::Arc;
 
+/// producer end of the buffer.
+/// write()s bytes into the buffer
 pub struct Producer {
     inner : Arc<CircularBuffer>
 }
+/// consumer end of the buffer.
+/// read()s bytes from the buffer.
 pub struct Consumer {
     inner : Arc<CircularBuffer>
 }
 
+/// circular buffer that can be safely shared between at most one producer and
+/// one consumer.
 pub struct CircularBuffer {
     capacity : uint,
     interior : UnsafeCell<(uint, uint, Vec<u8>)>
@@ -66,6 +72,7 @@ impl Producer {
         }
     }
 
+    /// store bytes into the buffer and return the number of bytes written
     pub fn write(&self, buf : &[u8]) -> uint {
         unsafe {
             match *(self.inner.interior.get()) {
@@ -107,6 +114,10 @@ impl Consumer {
         }
     }
 
+    /// copies data out of the buffer but does not
+    /// advance through the buffer.
+    /// subsequent read()s or more copies at the same index
+    /// will return the same bytes
     pub fn copy_data(&self, start : uint, buf : &mut [u8]) -> uint {
         unsafe {
             match *(self.inner.interior.get()) {
@@ -125,6 +136,7 @@ impl Consumer {
         }
     }
 
+    /// advances the read index the indicated number of bytes
     pub fn advance(&self, count : uint) -> uint {
         unsafe {
             match *(self.inner.interior.get()) {
