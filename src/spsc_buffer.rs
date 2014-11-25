@@ -2,7 +2,7 @@
 #[phase(plugin)] extern crate assertions;
 
 use std::cell::UnsafeCell;
-use std::cmp::min;
+use std::cmp::{max, min};
 use std::num::UnsignedInt;
 use std::sync::Arc;
 
@@ -160,6 +160,18 @@ impl Consumer {
                 (ref mut rp, wp, _) => {
                     let prev : uint = *rp;
                     *rp = min(prev + count, wp);
+                    *rp - prev
+                }
+            }
+        }
+    }
+
+    pub fn advance_to(&self, end : uint) -> uint {
+        unsafe {
+            match *(self.inner.interior.get()) {
+                (ref mut rp, wp, _) => {
+                    let prev : uint = *rp;
+                    *rp = min(max(prev, end), wp);
                     *rp - prev
                 }
             }

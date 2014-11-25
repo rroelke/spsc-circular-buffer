@@ -34,7 +34,7 @@ fn test_next() {
 
 #[test]
 fn test_buf() {
-    let calib : uint = ::std::rand::random();
+    let calib : uint = random();
     let (p, c) : (Producer, Consumer) =
         CircularBuffer::new_calibrated(65536, calib);
 
@@ -51,7 +51,7 @@ fn test_buf() {
     let mut wbuf : [u8, .. 1024] = [0, .. 1024];
     for _ in range(0u, 8u) {
         for i in range(0, 1024) {
-            wbuf[i] = ::std::rand::random();
+            wbuf[i] = random();
         }
 
         assert_eq!(p.write(wbuf.as_slice()), 1024);
@@ -121,12 +121,12 @@ fn test_buf() {
 
 #[test]
 fn test_copy_advance() {
-    let calibration : uint = ::std::rand::random();
+    let calibration : uint = random();
     let (p, c) : (Producer, Consumer) = CircularBuffer::new_calibrated(65536, calibration);
 
     let mut write_buf : [u8, .. 1024] = [0, .. 1024];
     for i in range(0, 1024) {
-        write_buf[i] = ::std::rand::random();
+        write_buf[i] = random();
     }
     assert_eq!(p.write(&write_buf), 1024);
 
@@ -143,5 +143,47 @@ fn test_copy_advance() {
 
     assert_eq!(c.advance(1024), 512);
     assert_eq!(c.copy_data(calibration + 1024, &mut read_buf), 0);
+}
+
+#[test]
+fn test_advance_to() {
+    let calibration : uint = random();
+    let (p, c) : (Producer, Consumer) = CircularBuffer::new_calibrated(65536, calibration);
+    assert_eq!(p.next(), calibration);
+    assert_eq!(c.next(), calibration);
+
+    assert_eq!(c.advance_to(calibration), 0);
+    assert_eq!(c.advance_to(calibration + (random::<uint>() % 65536u)), 0);
+    assert_eq!(p.next(), calibration);
+    assert_eq!(c.next(), calibration);
+
+    let mut buf : [u8, .. 1024] = [0, .. 1024];
+    for i in range(0, 1024) {
+        buf[i] = random();
+    }
+    assert_eq!(p.write(buf.as_slice()), 1024);
+
+    assert_eq!(c.advance_to(calibration), 0);
+    assert_eq!(c.advance_to(calibration - random()), 0);
+    assert_eq!(p.next(), calibration + 1024);
+    assert_eq!(c.next(), calibration);
+
+    assert_eq!(c.advance_to(calibration + 256), 256);
+    assert_eq!(p.next(), calibration + 1024);
+    assert_eq!(c.next(), calibration + 256);
+
+    assert_eq!(c.advance_to(calibration), 0);
+    assert_eq!(c.advance_to(calibration + 128), 0);
+    assert_eq!(c.advance_to(calibration + 256), 0);
+    assert_eq!(p.next(), calibration + 1024);
+    assert_eq!(c.next(), calibration + 256);
+
+    assert_eq!(c.advance_to(calibration + 320), 64);
+    assert_eq!(p.next(), calibration + 1024);
+    assert_eq!(c.next(), calibration + 320);
+
+    assert_eq!(c.advance_to(calibration + 2048), 1024 - 320);
+    assert_eq!(p.next(), calibration + 1024);
+    assert_eq!(c.next(), calibration + 1024);
 }
 
