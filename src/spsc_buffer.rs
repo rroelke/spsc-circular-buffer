@@ -21,7 +21,8 @@ pub struct Consumer {
 /// one consumer.
 pub struct CircularBuffer {
     capacity : uint,
-    interior : UnsafeCell<(uint, uint, uint, Vec<u8>)>
+    interior : UnsafeCell<(uint, uint, uint, Vec<u8>)>,
+    meta : UnsafeCell<uint>
 }
 
 impl CircularBuffer {
@@ -29,7 +30,8 @@ impl CircularBuffer {
         let capacity : uint = UnsignedInt::next_power_of_two(size);
         CircularBuffer {
             capacity : capacity,
-            interior : UnsafeCell::new((calib, calib, 0, Vec::from_elem(capacity, 0)))
+            interior : UnsafeCell::new((calib, calib, 0, Vec::from_elem(capacity, 0))),
+            meta : UnsafeCell::new(calib)
         }
     }
     pub fn new(size : uint) -> (Producer, Consumer) {
@@ -193,11 +195,21 @@ impl Consumer {
                         for i in range(0, to_read) {
                             buf[i] = cbuf[(start + i) % self.inner.capacity];
                         }
+                        *(self.inner.meta.get()) =
+                            max(*(self.inner.meta.get()), start + to_read);
 
                         to_read
                     }
                 }
             }
+        }
+    }
+
+    /// return the index of the highest-read character in the buffer
+    /// as indicated by copy_data() and read()
+    pub fn highest_read(&self) -> uint {
+        unsafe {
+            *(self.inner.meta.get())
         }
     }
 
