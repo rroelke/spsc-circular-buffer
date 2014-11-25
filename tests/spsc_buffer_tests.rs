@@ -4,7 +4,7 @@ extern crate spsc_buffer;
 
 use std::cmp::min;
 use std::rand::random;
-use spsc_buffer::{CircularBuffer, Consumer, Producer};
+use spsc_buffer::{CircularBuffer, CircularBufferUser, Consumer, Producer};
 
 #[test]
 fn test_next() {
@@ -164,7 +164,7 @@ fn test_advance_to() {
     assert_eq!(p.write(buf.as_slice()), 1024);
 
     assert_eq!(c.advance_to(calibration), 0);
-    assert_eq!(c.advance_to(calibration - random()), 0);
+    assert_eq!(c.advance_to(calibration - (random::<uint>() % calibration)), 0);
     assert_eq!(p.next(), calibration + 1024);
     assert_eq!(c.next(), calibration);
 

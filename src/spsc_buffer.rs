@@ -21,7 +21,7 @@ pub struct Consumer {
 /// one consumer.
 pub struct CircularBuffer {
     capacity : uint,
-    interior : UnsafeCell<(uint, uint, Vec<u8>)>
+    interior : UnsafeCell<(uint, uint, uint, Vec<u8>)>
 }
 
 impl CircularBuffer {
@@ -29,7 +29,7 @@ impl CircularBuffer {
         let capacity : uint = UnsignedInt::next_power_of_two(size);
         CircularBuffer {
             capacity : capacity,
-            interior : UnsafeCell::new((calib, calib, Vec::from_elem(capacity, 0)))
+            interior : UnsafeCell::new((calib, calib, 0, Vec::from_elem(capacity, 0)))
         }
     }
     pub fn new(size : uint) -> (Producer, Consumer) {
@@ -47,6 +47,48 @@ impl CircularBuffer {
     }
 }
 
+pub trait CircularBufferUser {
+    fn buffer<'a>(&'a self) -> &'a CircularBuffer;
+    fn next(&self) -> uint;
+
+    fn size(&self) -> uint {
+        unsafe {
+            match *(self.buffer().interior.get()) {
+                (rp, wp, _, _) => if !self.closed() || wp > rp {
+                    wp - rp
+                }
+                else {
+                    0
+                }
+            }
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.size() == 0
+    }
+
+    fn is_full(&self) -> bool {
+        self.available_capacity() == 0
+    }
+
+    fn closed(&self) -> bool {
+        unsafe {
+            match *(self.buffer().interior.get()) {
+                (_, _, cp, _) => cp != 0
+            }
+        }
+    }
+
+    fn max_capacity(&self) -> uint {
+        self.buffer().capacity
+    }
+
+    fn available_capacity(&self) -> uint {
+        self.max_capacity() - self.size()
+    }
+}
+
 /// Producers are cloneable, and can be safely shared provided the write()s
 /// of no two threads ever overlap.  Any other methods may overlap
 impl Clone for Producer {
@@ -55,46 +97,50 @@ impl Clone for Producer {
     }
 }
 
-impl Producer {
-    pub fn is_full(&self) -> bool {
-        self.available_capacity() == 0
+impl CircularBufferUser for Producer {
+    fn buffer<'a>(&'a self) -> &'a CircularBuffer {
+        &*self.inner
     }
-
-    pub fn next(&self) -> uint {
+    fn next(&self) -> uint {
         unsafe {
             match *(self.inner.interior.get()) {
-                (_, wp, _) => wp
+                (_, wp, _, _) => wp
             }
         }
     }
+}
 
-    pub fn max_capacity(&self) -> uint {
-        self.inner.capacity
-    }
-
-    pub fn available_capacity(&self) -> uint {
+impl Producer {
+    pub fn close(&self) {
         unsafe {
             match *(self.inner.interior.get()) {
-                (rp, wp, _) => self.inner.capacity - (wp - rp)
+                (_, wp, ref mut cp, _) => if *cp == 0 { *cp = wp; }
             }
         }
     }
 
     /// store bytes into the buffer and return the number of bytes written
+    /// linearizable since there is only one producer, i.e. the thread calling
+    /// this is the only thread that can close the buffer
     pub fn write(&self, buf : &[u8]) -> uint {
-        unsafe {
-            match *(self.inner.interior.get()) {
-                (rp, ref mut wp, ref mut cbuf) => {
-                    let to_write : uint = min(self.available_capacity(), buf.len());
-                    for i in range(0, to_write) {
-                        cbuf[(*wp + i) % self.inner.capacity] = buf[i];
+        if self.closed() {
+            0
+        }
+        else {
+            unsafe {
+                match *(self.inner.interior.get()) {
+                    (rp, ref mut wp, _, ref mut cbuf) => {
+                        let to_write : uint = min(self.available_capacity(), buf.len());
+                        for i in range(0, to_write) {
+                            cbuf[(*wp + i) % self.inner.capacity] = buf[i];
+                        }
+
+                        *wp += to_write;
+
+                        assert_le!(rp, *wp);
+
+                        to_write
                     }
-
-                    *wp += to_write;
-
-                    assert_le!(rp, *wp);
-
-                    to_write
                 }
             }
         }
@@ -110,27 +156,27 @@ impl Clone for Consumer {
     }
 }
 
-impl Consumer {
-    pub fn is_empty(&self) -> bool {
-        self.size() == 0
+impl CircularBufferUser for Consumer {
+    fn buffer<'a>(&'a self) -> &'a CircularBuffer {
+        &*self.inner
     }
+    fn next(&self) -> uint {
+        unsafe {
+            match *(self.inner.interior.get()) {
+                (rp, _, _, _) => rp
+            }
+        }
+    }
+}
 
+impl Consumer {
     pub fn next(&self) -> uint {
         unsafe {
             match *(self.inner.interior.get()) {
-                (rp, _, _) => rp
+                (rp, _, _, _) => rp
             }
         }
     }
-
-    pub fn size(&self) -> uint {
-        unsafe {
-            match *(self.inner.interior.get()) {
-                (rp, wp, _) => wp - rp
-            }
-        }
-    }
-
     /// copies data out of the buffer but does not
     /// advance through the buffer.
     /// subsequent read()s or more copies at the same index
@@ -138,7 +184,7 @@ impl Consumer {
     pub fn copy_data(&self, start : uint, buf : &mut [u8]) -> uint {
         unsafe {
             match *(self.inner.interior.get()) {
-                (rp, wp, ref cbuf) => {
+                (rp, wp, _, ref cbuf) => {
                     assert_ge!(start, wp - self.inner.capacity);
                     assert_ge!(start, rp);
 
@@ -157,7 +203,7 @@ impl Consumer {
     pub fn advance(&self, count : uint) -> uint {
         unsafe {
             match *(self.inner.interior.get()) {
-                (ref mut rp, wp, _) => {
+                (ref mut rp, wp, _, _) => {
                     let prev : uint = *rp;
                     *rp = min(prev + count, wp);
                     *rp - prev
@@ -169,7 +215,7 @@ impl Consumer {
     pub fn advance_to(&self, end : uint) -> uint {
         unsafe {
             match *(self.inner.interior.get()) {
-                (ref mut rp, wp, _) => {
+                (ref mut rp, wp, _, _) => {
                     let prev : uint = *rp;
                     *rp = min(max(prev, end), wp);
                     *rp - prev
@@ -181,7 +227,7 @@ impl Consumer {
     pub fn read(&self, buf : &mut [u8]) -> uint {
         unsafe {
             match *(self.inner.interior.get()) {
-                (ref mut rp, wp, _) => {
+                (ref mut rp, wp, _, _) => {
                     let nread : uint = self.copy_data(*rp, buf);
                     *rp += nread;
 
