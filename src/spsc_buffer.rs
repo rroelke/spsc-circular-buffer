@@ -185,7 +185,7 @@ impl Consumer {
         unsafe {
             match *(self.inner.interior.get()) {
                 (rp, wp, _, ref cbuf) => {
-                    assert_ge!(start, wp - self.inner.capacity);
+                    assert_ge!(start, wp - self.max_capacity());
                     assert_ge!(start, rp);
 
                     let to_read : uint = min(self.size(), buf.len());
