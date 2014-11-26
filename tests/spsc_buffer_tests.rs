@@ -96,7 +96,7 @@ fn test_buf() {
 
     assert!(p.is_full());
     assert_eq!(c.size(), p.max_capacity());
-    assert_eq!(p.available_capacity(), 0);
+    assert_eq!(p.available_capacity(), 0u);
     assert_eq!(p.write(wbuf.as_slice()), 0);
 
     /* now read everything */
@@ -192,3 +192,30 @@ fn test_advance_to() {
     assert_eq!(c.next(), calibration + 1024);
 }
 
+#[test]
+fn test_close() {
+    let calibration : uint = random();
+    let (p, c) : (Producer, Consumer) = CircularBuffer::new_calibrated(65536, calibration);
+
+    let mut rbuf : [u8, .. 1024] = [0, .. 1024];
+    let mut buf : [u8, .. 1024] = [0, .. 1024];
+    for i in range(0, 1024) {
+        buf[i] = random();
+    }
+
+    assert_eq!(p.write(buf.as_slice()), 1024);
+    assert_eq!(p.available_capacity(), 65536 - 1024);
+
+    p.close();
+    assert_eq!(p.available_capacity(), 0u);
+    assert_eq!(p.write(buf.as_slice()), 0);
+    assert_eq!(c.read(rbuf.as_mut_slice()), 1024);
+
+    for i in range(0, 1024) {
+        assert_eq!(buf[i], rbuf[i]);
+    }
+
+    assert_eq!(c.read(rbuf.as_mut_slice()), 0);
+    assert_eq!(c.size(), 0);
+    assert_eq!(p.available_capacity(), 0);
+}

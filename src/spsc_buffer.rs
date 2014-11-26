@@ -56,7 +56,8 @@ pub trait CircularBufferUser {
     fn size(&self) -> uint {
         unsafe {
             match *(self.buffer().interior.get()) {
-                (rp, wp, _, _) => if !self.closed() || wp > rp {
+                (rp, wp, cp, _) => if !self.closed() || wp > rp {
+                    assert!(cp == 0 || wp == cp);
                     wp - rp
                 }
                 else {
@@ -87,7 +88,12 @@ pub trait CircularBufferUser {
     }
 
     fn available_capacity(&self) -> uint {
-        self.max_capacity() - self.size()
+        if self.closed() {
+            0 /* since no more characters can be written */
+        }
+        else {
+            self.max_capacity() - self.size()
+        }
     }
 }
 
@@ -131,7 +137,7 @@ impl Producer {
         else {
             unsafe {
                 match *(self.inner.interior.get()) {
-                    (rp, ref mut wp, _, ref mut cbuf) => {
+                    (rp, ref mut wp, cp, ref mut cbuf) => {
                         let to_write : uint = min(self.available_capacity(), buf.len());
                         for i in range(0, to_write) {
                             cbuf[(*wp + i) % self.inner.capacity] = buf[i];
@@ -140,6 +146,7 @@ impl Producer {
                         *wp += to_write;
 
                         assert_le!(rp, *wp);
+                        assert_eq!(cp, 0);
 
                         to_write
                     }
@@ -241,7 +248,8 @@ impl Consumer {
     pub fn read(&self, buf : &mut [u8]) -> uint {
         unsafe {
             match *(self.inner.interior.get()) {
-                (ref mut rp, wp, _, _) => {
+                (ref mut rp, wp, cp, _) => {
+                    assert!(cp == 0 || wp == cp);
                     let nread : uint = self.copy_data(*rp, buf);
                     *rp += nread;
 
