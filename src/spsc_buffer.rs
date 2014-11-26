@@ -193,7 +193,8 @@ impl Consumer {
     pub fn copy_data(&self, start : uint, buf : &mut [u8]) -> uint {
         unsafe {
             match *(self.inner.interior.get()) {
-                (rp, wp, _, ref cbuf) => {
+                (rp, wp, cp, ref cbuf) => {
+                    assert!(cp == 0 || wp == cp);
                     if start < wp - self.max_capacity() || start < rp {
                         0
                     }

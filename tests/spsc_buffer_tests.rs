@@ -206,7 +206,10 @@ fn test_close() {
     assert_eq!(p.write(buf.as_slice()), 1024);
     assert_eq!(p.available_capacity(), 65536 - 1024);
 
+    let p2 = p.clone();
     p.close();
+    assert!(p2.closed());
+    assert!(c.closed());
     assert_eq!(p.available_capacity(), 0u);
     assert_eq!(p.write(buf.as_slice()), 0);
     assert_eq!(c.read(rbuf.as_mut_slice()), 1024);
@@ -218,4 +221,10 @@ fn test_close() {
     assert_eq!(c.read(rbuf.as_mut_slice()), 0);
     assert_eq!(c.size(), 0);
     assert_eq!(p.available_capacity(), 0);
+
+    let mut rbuf2 : [u8, .. 128] = [0, .. 128];
+    assert_eq!(c.read(rbuf2.as_mut_slice()), 0);
+    for i in range(0, 128) {
+        assert_eq!(rbuf2[i], 0);
+    }
 }
